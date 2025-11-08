@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Code Generator</title>
+    <title>AJCE QR Code Generator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         :root {
@@ -299,9 +299,10 @@
                         <input type="number" id="bottom-height-value" min="20" max="100" value="60">
                     </div>
                 </div>
-                
-                <button id="generate">Regenerate QR Code</button>
-                <p class="auto-note">QR code updates automatically when you change any setting</p>
+
+                <button id="download">Download QR Code</button>
+                <button hidden id="generate">Regenerate QR Code</button>
+
             </div>
             
             <div class="preview-card">
@@ -316,7 +317,7 @@
                         </div>
                     </div>
                     <img id="qrcode-image" alt="QR Preview" style="display:block; max-width:100%; width:300px; border-radius:10px; margin-top:12px;" />
-                    <button id="download">Download QR Code</button>
+                    <button hidden id="download">Download QR Code</button>
                 </div>
             </div>
         </div>

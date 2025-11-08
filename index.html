@@ -239,7 +239,10 @@
                 
                 <div class="form-group">
                     <label for="text">Text label (shown below QR code)</label>
-                    <input type="text" id="text" placeholder="REPORT" value="REPORT">
+                    <input type="text" id="text" placeholder="REPORT" value="REPORT" maxlength="100">
+                    <small style="color: var(--gray-500); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                        Long text will be automatically wrapped and font size adjusted
+                    </small>
                 </div>
                 
                 <div class="form-group">
@@ -551,11 +554,65 @@
                 // Draw the QR code onto the main canvas (already at correct resolution)
                 ctx.drawImage(qrCanvas, scaledBorderWidth + scaledWhitePadding, scaledBorderWidth + scaledWhitePadding);
 
-                // Draw text with scaled font size
+                // Draw text with scaled font size and overflow handling
                 ctx.fillStyle = '#FFFFFF';
-                ctx.font = `bold ${20 * scale}px Arial`;
                 ctx.textAlign = 'center';
-                ctx.fillText(text, totalWidth / 2, totalHeight - (scaledBottomHeight / 2) + 5 * scale);
+                
+                // Calculate appropriate font size based on text length and available width
+                const maxWidth = totalWidth - (scaledBorderWidth * 2);
+                let fontSize = 20 * scale;
+                let lines = [];
+                
+                // Function to wrap text into multiple lines
+                function wrapText(text, maxWidth) {
+                    const words = text.split(' ');
+                    const lines = [];
+                    let currentLine = words[0] || '';
+                    
+                    for (let i = 1; i < words.length; i++) {
+                        const word = words[i];
+                        const testLine = currentLine + ' ' + word;
+                        ctx.font = `bold ${fontSize}px Arial`;
+                        const metrics = ctx.measureText(testLine);
+                        
+                        if (metrics.width > maxWidth && currentLine !== '') {
+                            lines.push(currentLine);
+                            currentLine = word;
+                        } else {
+                            currentLine = testLine;
+                        }
+                    }
+                    lines.push(currentLine);
+                    return lines;
+                }
+                
+                // Start with original font size and reduce if needed
+                do {
+                    ctx.font = `bold ${fontSize}px Arial`;
+                    lines = wrapText(text, maxWidth);
+                    
+                    // Check if all lines fit in available height (with bottom padding)
+                    const lineHeight = fontSize * 1.2;
+                    const totalTextHeight = lines.length * lineHeight;
+                    const bottomPadding = 15 * scale; // Add bottom padding
+                    
+                    if (totalTextHeight > scaledBottomHeight - bottomPadding - 10 * scale) {
+                        fontSize -= 2 * scale; // Reduce font size
+                    } else {
+                        break; // Text fits
+                    }
+                } while (fontSize > 12 * scale); // Minimum font size
+                
+                // Draw each line of text with bottom padding
+                const lineHeight = fontSize * 1.2;
+                const bottomPadding = 15 * scale; // Bottom padding for text
+                const availableHeight = scaledBottomHeight - bottomPadding;
+                const startY = totalHeight - scaledBottomHeight + (availableHeight - (lines.length * lineHeight)) / 2 + lineHeight;
+                
+                lines.forEach((line, index) => {
+                    const y = startY + (index * lineHeight);
+                    ctx.fillText(line, totalWidth / 2, y);
+                });
 
                 return fullCanvas;
             }

@@ -55,6 +55,14 @@
             font-size: 0.875rem;
         }
 
+        .auto-note {
+            color: var(--gray-500);
+            font-size: 0.75rem;
+            text-align: center;
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+
         .app-layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -292,7 +300,8 @@
                     </div>
                 </div>
                 
-                <button id="generate">Generate QR Code</button>
+                <button id="generate">Regenerate QR Code</button>
+                <p class="auto-note">QR code updates automatically when you change any setting</p>
             </div>
             
             <div class="preview-card">
@@ -335,11 +344,13 @@
             
             logoColorPicker.addEventListener('input', function() {
                 logoColorText.value = this.value;
+                debouncedGenerate(); // Use debounced function
             });
             
             logoColorText.addEventListener('input', function() {
                 if (/^#[0-9A-F]{6}$/i.test(this.value)) {
                     logoColorPicker.value = this.value;
+                    debouncedGenerate(); // Use debounced function
                 }
             });
             
@@ -349,14 +360,28 @@
                 
                 rangeInput.addEventListener('input', function() {
                     numberInput.value = this.value;
+                    debouncedGenerate(); // Use debounced function
                 });
                 
                 numberInput.addEventListener('input', function() {
                     rangeInput.value = this.value;
+                    debouncedGenerate(); // Use debounced function
                 });
             }
             
             let qrInstance = null;
+            let generateTimeout = null;
+            
+            // Debounced generate function to prevent too frequent updates
+            function debouncedGenerate() {
+                clearTimeout(generateTimeout);
+                generateTimeout = setTimeout(generateQRCode, 300); // 300ms delay
+            }
+            
+            // Add auto-generation listeners for all form inputs
+            document.getElementById('url').addEventListener('input', debouncedGenerate);
+            document.getElementById('text').addEventListener('input', debouncedGenerate);
+            document.getElementById('logo').addEventListener('change', generateQRCode); // Immediate for file changes
             
             generateBtn.addEventListener('click', generateQRCode);
             downloadBtn.addEventListener('click', downloadQRCode);

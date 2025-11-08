@@ -185,6 +185,7 @@
         }
 
         #qrcode-container {
+            display: none!important;
             width: 300px;
             height: 350px;
             display: flex;
@@ -287,7 +288,7 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="logo">Logo image (centered in QR code)</label>
+                    <label for="logo">Logo image (Empty For AJCE logo)</label>
                     <input type="file" id="logo" accept="image/*">
                 </div>
                 
@@ -328,8 +329,8 @@
                     
                     <div class="form-group">
                         <label for="bottom-height">Bottom Text Height (px)</label>
-                        <input type="range" id="bottom-height" min="20" max="100" value="30">
-                        <input type="number" id="bottom-height-value" min="20" max="100" value="30">
+                        <input type="range" id="bottom-height" min="20" max="100" value="60">
+                        <input type="number" id="bottom-height-value" min="20" max="100" value="60">
                     </div>
                 </div>
                 
@@ -347,6 +348,7 @@
                             <div id="qr-text">REPORT</div>
                         </div>
                     </div>
+                    <img id="qrcode-image" alt="QR Preview" style="display:block; max-width:100%; width:300px; border-radius:10px; margin-top:12px;" />
                     <button id="download">Download QR Code</button>
                 </div>
             </div>
@@ -442,81 +444,91 @@
                     colorLight: "#ffffff",
                     correctLevel: QRCode.CorrectLevel.H // High error correction to allow for logo
                 });
+
+                // Update preview immediately (if there is no logo or while logo loads)
+                updatePreview();
                 
-                // Add logo if selected
-                if (logoInput.files && logoInput.files[0]) {
-                    const reader = new FileReader();
-                    
-                    reader.onload = function(e) {
-                        const logo = new Image();
-                        logo.src = e.target.result;
-                        
-                        logo.onload = function() {
-                            // Need to wait a bit for QR code to render before adding logo
-                            setTimeout(() => {
-                                addLogoToQRCode(logo, size, logoColor);
-                            }, 50);
+                // Add logo: use selected file if provided; otherwise try default 'amaljyothi.pn'/'amaljyothi.png'
+                (function handleLogo() {
+                    if (logoInput.files && logoInput.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const logo = new Image();
+                            logo.src = e.target.result;
+                            logo.onload = function() {
+                                // Need to wait a bit for QR code to render before adding logo
+                                setTimeout(() => addLogoToQRCode(logo, size, logoColor), 50);
+                            };
                         };
-                    };
-                    
-                    reader.readAsDataURL(logoInput.files[0]);
-                }
+                        reader.readAsDataURL(logoInput.files[0]);
+                        return;
+                    }
+
+                    // No file selected: attempt to load default logo files in order
+                    const candidates = ['amaljyothi.pn', 'amaljyothi.png'];
+                    let idx = 0;
+                    function tryLoadDefault() {
+                        if (idx >= candidates.length) return; // nothing found
+                        const logo = new Image();
+                        // Allow cross-origin loading if file is served from another origin
+                        logo.crossOrigin = 'anonymous';
+                        logo.src = candidates[idx];
+                        logo.onload = function() {
+                            // Wait a bit for QR code to render before adding logo
+                            setTimeout(() => addLogoToQRCode(logo, size, logoColor), 50);
+                        };
+                        logo.onerror = function() {
+                            idx++;
+                            tryLoadDefault();
+                        };
+                    }
+                    tryLoadDefault();
+                })();
             }
             
             function addLogoToQRCode(logoImg, size, logoColor) {
                 // Get the QR code canvas
                 const canvas = qrcodeContainer.querySelector('canvas');
+                if (!canvas) return;
                 const ctx = canvas.getContext('2d');
-                
+
                 // Calculate logo size (about 20% of QR code)
                 const logoSize = size * 0.2;
                 const logoX = (size - logoSize) / 2;
                 const logoY = (size - logoSize) / 2;
-                
-                // Create circular white background
+
+                // Create circular white background (slightly larger than logo)
                 ctx.fillStyle = '#FFFFFF';
                 ctx.beginPath();
                 ctx.arc(size / 2, size / 2, logoSize / 1.8, 0, Math.PI * 2);
                 ctx.fill();
-                
-                // Draw colored border for logo
-                ctx.strokeStyle = logoColor;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(size / 2, size / 2, logoSize / 2, 0, Math.PI * 2);
-                ctx.stroke();
-                
-                // Create circular clipping path for the logo
+
+                // Removed colored border: do not draw a stroked circle around the logo.
+                // Keep a circular clipping path and draw the logo inside it.
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(size / 2, size / 2, logoSize / 2 - 1, 0, Math.PI * 2);
                 ctx.clip();
-                
+
                 // Draw logo
                 ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
                 ctx.restore();
+
+                // After adding the logo, update the image preview to reflect the final composition
+                updatePreview();
             }
-            
-            function downloadQRCode() {
-                const canvas = qrcodeContainer.querySelector('canvas');
-                const text = document.getElementById('text').value || 'REPORT';
-                const size = parseInt(document.getElementById('size-value').value) || 300;
-                const borderWidth = parseInt(document.getElementById('border-width-value').value) || 10;
-                const whitePadding = parseInt(document.getElementById('white-padding-value').value) || 20;
-                const borderRadius = parseInt(document.getElementById('border-radius-value').value) || 10;
-                const bottomHeight = parseInt(document.getElementById('bottom-height-value').value) || 30;
-                
+
+            // Build the full composed canvas (black border, white inner, QR canvas, and bottom text)
+            function createFullCanvasFromCanvas(qrCanvas, text, size, borderWidth, whitePadding, borderRadius, bottomHeight) {
                 // Calculate total dimensions
                 const totalWidth = size + (whitePadding * 2) + (borderWidth * 2);
                 const totalHeight = size + (whitePadding * 2) + (borderWidth * 2) + bottomHeight;
-                
-                // Create a new canvas for the full image with border and text
+
                 const fullCanvas = document.createElement('canvas');
                 fullCanvas.width = totalWidth;
                 fullCanvas.height = totalHeight;
-                
                 const ctx = fullCanvas.getContext('2d');
-                
+
                 // Function to draw a rounded rectangle
                 function roundRect(ctx, x, y, width, height, radius) {
                     ctx.beginPath();
@@ -531,26 +543,62 @@
                     ctx.quadraticCurveTo(x, y, x + radius, y);
                     ctx.closePath();
                 }
-                
+
                 // Draw black background with rounded corners
                 ctx.fillStyle = '#000000';
-                roundRect(ctx, 0, 0, totalWidth, totalHeight, borderRadius);
+                roundRect(ctx, 0, 0, totalWidth, totalHeight, borderRadius || 0);
                 ctx.fill();
-                
+
                 // Draw white background with rounded corners
                 ctx.fillStyle = '#FFFFFF';
-                roundRect(ctx, borderWidth, borderWidth, totalWidth - (borderWidth * 2), totalHeight - borderWidth * 2 - bottomHeight, borderRadius - 2);
+                roundRect(ctx, borderWidth, borderWidth, totalWidth - (borderWidth * 2), totalHeight - borderWidth * 2 - bottomHeight, Math.max((borderRadius || 0) - 2, 0));
                 ctx.fill();
-                
+
                 // Draw the QR code onto the main canvas
-                ctx.drawImage(canvas, borderWidth + whitePadding, borderWidth + whitePadding);
-                
+                ctx.drawImage(qrCanvas, borderWidth + whitePadding, borderWidth + whitePadding);
+
                 // Draw text
                 ctx.fillStyle = '#FFFFFF';
+                // Match style used for preview text (you can tweak this)
                 ctx.font = 'bold 20px Arial';
                 ctx.textAlign = 'center';
                 ctx.fillText(text, totalWidth / 2, totalHeight - (bottomHeight / 2) + 5);
-                
+
+                return fullCanvas;
+            }
+
+            // Update the <img> preview with the composed image if QR canvas exists
+            function updatePreview() {
+                const canvas = qrcodeContainer.querySelector('canvas');
+                const previewImg = document.getElementById('qrcode-image');
+                if (!canvas || !previewImg) return;
+
+                const text = document.getElementById('text').value || 'REPORT';
+                const size = parseInt(document.getElementById('size-value').value) || 300;
+                const borderWidth = parseInt(document.getElementById('border-width-value').value) || 10;
+                const whitePadding = parseInt(document.getElementById('white-padding-value').value) || 20;
+                const borderRadius = parseInt(document.getElementById('border-radius-value').value) || 10;
+                const bottomHeight = parseInt(document.getElementById('bottom-height-value').value) || 30;
+
+                const fullCanvas = createFullCanvasFromCanvas(canvas, text, size, borderWidth, whitePadding, borderRadius, bottomHeight);
+                previewImg.src = fullCanvas.toDataURL('image/png');
+                // Make sure the preview image size matches requested size visually
+                previewImg.style.width = Math.min(size + (whitePadding * 2) + (borderWidth * 2), 400) + 'px';
+                previewImg.style.display = 'block';
+            }
+            
+            function downloadQRCode() {
+                const canvas = qrcodeContainer.querySelector('canvas');
+                if (!canvas) return;
+                const text = document.getElementById('text').value || 'REPORT';
+                const size = parseInt(document.getElementById('size-value').value) || 300;
+                const borderWidth = parseInt(document.getElementById('border-width-value').value) || 10;
+                const whitePadding = parseInt(document.getElementById('white-padding-value').value) || 20;
+                const borderRadius = parseInt(document.getElementById('border-radius-value').value) || 10;
+                const bottomHeight = parseInt(document.getElementById('bottom-height-value').value) || 30;
+
+                const fullCanvas = createFullCanvasFromCanvas(canvas, text, size, borderWidth, whitePadding, borderRadius, bottomHeight);
+
                 // Create download link
                 const link = document.createElement('a');
                 link.download = 'qrcode.png';
